@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0.85; animation: fade 220ms ease-out forwards; }
+  @keyframes fade { to { opacity: 0; } }
+</style>
+</head>
+<body>
+<div id="flash"></div>
+<script>
+  // シャッター音を Web Audio で合成して鳴らす(音声ファイル不要)
+  (function () {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    var ctx = new Ctx();
+    var now = ctx.currentTime;
+
+    function click(offset, freq, dur) {
+      var len = Math.floor(ctx.sampleRate * dur);
+      var buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      var data = buf.getChannelData(0);
+      for (var i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+      }
+      var src = ctx.createBufferSource();
+      src.buffer = buf;
+      var filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = freq;
+      filter.Q.value = 0.9;
+      var gain = ctx.createGain();
+      gain.gain.value = 0.7;
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(now + offset);
+    }
+
+    click(0, 3200, 0.05);
+    click(0.07, 1800, 0.08);
+  })();
+</script>
+</body>
+</html>
