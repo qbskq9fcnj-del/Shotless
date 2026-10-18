@@ -4,7 +4,7 @@
 
 ## ダウンロード
 
-[Releases](https://github.com/qbskq9fcnj-del/Shotless/releases) から Mac 用の `.dmg` をダウンロードします(Apple Silicon は `arm64`、Intel は `x64`)。開いて Shotless を Applications にドラッグしてください。Apple の署名・公証済みです。Windows 版は今のところありません。
+[Releases](https://github.com/qbskq9fcnj-del/Shotless/releases) から Mac 用の `.dmg` をダウンロードします(Apple Silicon の Mac 用です。Intel の Mac には対応していません)。開いて Shotless を Applications にドラッグしてください。Apple の署名・公証済みです。Windows 版は今のところありません。
 
 ## 使い方
 

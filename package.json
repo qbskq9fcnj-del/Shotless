@@ -33,8 +33,7 @@
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ],
@@ -46,10 +45,6 @@
       "hardenedRuntime": true,
       "notarize": true,
       "artifactName": "${productName}-${version}-${arch}.${ext}"
-    },
-    "publish": {
-      "provider": "github",
-      "releaseType": "release"
     }
   }
 }
