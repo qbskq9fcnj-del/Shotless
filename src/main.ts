@@ -12,14 +12,16 @@ import {
   Tray,
 } from 'electron';
 import * as path from 'path';
-import { loadSettings, sanitize, saveSettings, Settings } from './settings';
+import { loadSettings, sanitizeSettings, saveSettings, Settings } from './settings';
 
 // 注意: 撮影した画像はメモリ上の nativeImage のまま扱い、ディスクには一切書き込まない。
-// 画像の書き込みに fs を使わないこと(settings.ts が設定JSONだけを保存する)。
+// 保存するのは settings.ts の設定ファイルだけ。
 
 const FLASH_MS = 400;
 
+let settings: Settings;
 let tray: Tray | null = null;
+let settingsWindow: BrowserWindow | null = null;
 let capturing = false;
 let lastCaptureAt = 0;
 let settings: Settings;
@@ -98,6 +100,7 @@ function flashAndBeep(display: Display): void {
   }, FLASH_MS);
 }
 
+// ショートカットで撮影する。クリップボードに入れ、音とフラッシュで知らせる。
 async function takeScreenshot(): Promise<void> {
   if (capturing) return;
   if (Date.now() - lastCaptureAt < settings.intervalMs) return;
@@ -120,78 +123,102 @@ function registerShortcut(accelerator: string): boolean {
   try {
     return globalShortcut.register(accelerator, () => void takeScreenshot());
   } catch {
-    return false;
+    return false; // 不正なアクセラレータ
   }
 }
 
-function openSettings(): void {
-  if (settingsWin && !settingsWin.isDestroyed()) {
-    settingsWin.focus();
+function applyLoginItem(): void {
+  if (!app.isPackaged) return; // 開発中(npm start)は登録しない
+  app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
+}
+
+function buildTrayMenu(): void {
+  tray?.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Shotless', enabled: false },
+      { label: '設定...', click: openSettings },
+      { type: 'separator' },
+      { label: '設定…', click: () => openSettingsWindow() },
+      { type: 'separator' },
+      { label: '終了', click: () => app.quit() },
+    ]),
+  );
+  tray?.setToolTip(`Shotless (${settings.shortcut})`);
+}
+
+type UpdateResult = { ok: true; settings: Settings } | { ok: false; error: string; settings: Settings };
+
+function updateSettings(patch: unknown): UpdateResult {
+  const next = sanitizeSettings({ ...settings, ...(typeof patch === 'object' && patch ? patch : {}) });
+
+  if (next.shortcut !== settings.shortcut) {
+    globalShortcut.unregister(settings.shortcut);
+    if (!registerShortcut(next.shortcut)) {
+      registerShortcut(settings.shortcut); // 失敗したら元のキーに戻す
+      return {
+        ok: false,
+        error: 'このキーは登録できませんでした(他のアプリが使っている可能性があります)',
+        settings,
+      };
+    }
+  }
+
+  settings = next;
+  saveSettings(settings);
+  applyLoginItem();
+  buildTrayMenu();
+  settingsWindow?.webContents.send('settings:changed', settings);
+  return { ok: true, settings };
+}
+
+function openSettingsWindow(): void {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
     return;
   }
-  settingsWin = new BrowserWindow({
-    width: 380,
-    height: 300,
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
+  settingsWindow = new BrowserWindow({
+    width: 520,
+    height: 380,
     title: 'Shotless 設定',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
-  settingsWin.setMenu(null);
-  settingsWin.loadFile(path.join(__dirname, '..', 'src', 'settings.html'));
-  settingsWin.on('closed', () => {
-    settingsWin = null;
+  settingsWindow.removeMenu();
+  settingsWindow.loadFile(path.join(__dirname, '..', 'src', 'settings.html'));
+  settingsWindow.on('closed', () => {
+    settingsWindow = null;
   });
-}
-
-function setupIpc(): void {
-  ipcMain.handle('settings:get', () => settings);
-  ipcMain.handle('settings:save', (_e, input: unknown) => {
-    const next = sanitize(input);
-    if (next.shortcut !== settings.shortcut) {
-      // 新しいショートカットが登録できなければ、元のものを残す
-      globalShortcut.unregister(settings.shortcut);
-      if (!registerShortcut(next.shortcut)) {
-        registerShortcut(settings.shortcut);
-        return { ok: false, error: 'このショートカットは使えません' };
-      }
-    }
-    settings = next;
-    saveSettings(settings);
-    tray?.setToolTip(`Shotless (${settings.shortcut})`);
-    return { ok: true, settings };
-  });
+  app.focus({ steal: true });
 }
 
 function setupTray(): void {
   tray = new Tray(createTrayIcon());
-  tray.setToolTip(`Shotless (${settings.shortcut})`);
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Shotless', enabled: false },
-      { label: '設定...', click: openSettings },
-      { type: 'separator' },
-      { label: '終了', click: () => app.quit() },
-    ]),
-  );
+  tray.on('double-click', () => openSettingsWindow());
+  buildTrayMenu();
 }
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  app.on('second-instance', () => openSettingsWindow());
+
   app.whenReady().then(() => {
     if (process.platform === 'darwin') app.dock?.hide();
     settings = loadSettings();
+
+    ipcMain.handle('settings:get', () => settings);
+    ipcMain.handle('settings:set', (_event, patch) => updateSettings(patch));
+
     setupTray();
-    setupIpc();
     if (!registerShortcut(settings.shortcut)) {
       console.error(`failed to register shortcut: ${settings.shortcut}`);
     }
+    applyLoginItem();
   });
 
   // ウィンドウを持たない常駐アプリなので、全ウィンドウが閉じても終了しない
