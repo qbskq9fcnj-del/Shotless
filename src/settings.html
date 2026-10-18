@@ -14,6 +14,7 @@
   section { padding: 14px 0; border-top: 1px solid var(--line); }
   h2 { font-size: 14px; margin: 0 0 4px; }
   p.hint { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; }
+  span.hint { color: var(--muted); font-size: 12.5px; }
   .row { display: flex; gap: 8px; align-items: center; }
   input[type=text], textarea { flex: 1; box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; font: inherit; }
   input[type=text]:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
@@ -48,6 +49,14 @@
       <p class="hint">音もフラッシュも出ません。オンの間は、画面をメモリ上に1枚だけ保持します(ディスクには保存しません)。対象アプリに切り替えるたびに、クリップボードが上書きされます。</p>
     </span>
   </label>
+</section>
+
+<section>
+  <h2>負荷の軽さ</h2>
+  <p class="hint">自動撮影のために、画面を保持する頻度と画質を選びます。画面が変わらない間は撮影の間隔を自動で延ばし、無操作が5秒続くと止まります。</p>
+  <label class="check"><input type="radio" name="performance" value="light"><span>軽い <span class="hint">(約4秒ごと・画質50%)</span></span></label>
+  <label class="check"><input type="radio" name="performance" value="standard"><span>標準・おすすめ <span class="hint">(約2秒ごと・画質75%)</span></span></label>
+  <label class="check"><input type="radio" name="performance" value="fresh"><span>鮮度重視 <span class="hint">(約1秒ごと・画質100%)</span></span></label>
 </section>
 
 <section>
@@ -97,6 +106,9 @@
     shortcutInput.value = prettyShortcut(settings.shortcut);
     $('autoOnSwitch').checked = settings.autoOnSwitch;
     $('launchAtLogin').checked = settings.launchAtLogin;
+    document.querySelectorAll('input[name=performance]').forEach(function (el) {
+      el.checked = el.value === settings.performance;
+    });
     if (document.activeElement !== $('targets')) $('targets').value = settings.targets.join('\n');
   }
 
@@ -157,6 +169,9 @@
   $('resetShortcut').addEventListener('click', function () { save({ shortcut: 'CommandOrControl+Shift+S' }); });
   $('autoOnSwitch').addEventListener('change', function (e) { save({ autoOnSwitch: e.target.checked }); });
   $('launchAtLogin').addEventListener('change', function (e) { save({ launchAtLogin: e.target.checked }); });
+  document.querySelectorAll('input[name=performance]').forEach(function (el) {
+    el.addEventListener('change', function () { save({ performance: el.value }); });
+  });
   $('targets').addEventListener('blur', function (e) {
     save({ targets: e.target.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean) });
   });

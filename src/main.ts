@@ -8,11 +8,13 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  powerMonitor,
   screen,
   Tray,
 } from 'electron';
 import * as path from 'path';
 import { SwitchCapture } from './autoCapture';
+import { PERFORMANCE_PRESETS } from './presets';
 import { loadSettings, sanitizeSettings, saveSettings, Settings } from './settings';
 
 // 注意: 撮影した画像はメモリ上の nativeImage のまま扱い、ディスクには一切書き込まない。
@@ -51,13 +53,13 @@ function currentDisplay(): Display {
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
 }
 
-async function captureDisplay(display: Display): Promise<Electron.NativeImage | null> {
-  const scale = display.scaleFactor;
+async function captureDisplay(display: Display, quality = 1): Promise<Electron.NativeImage | null> {
+  const scale = display.scaleFactor * quality;
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
     thumbnailSize: {
-      width: Math.round(display.bounds.width * scale),
-      height: Math.round(display.bounds.height * scale),
+      width: Math.max(1, Math.round(display.bounds.width * scale)),
+      height: Math.max(1, Math.round(display.bounds.height * scale)),
     },
   });
   const source =
@@ -128,11 +130,13 @@ function applyAutoCapture(): void {
   if (settings.autoOnSwitch) {
     if (!switchCapture) {
       // 自動撮影は音もフラッシュも出さない
-      switchCapture = new SwitchCapture(
-        () => captureDisplay(currentDisplay()),
-        (image) => clipboard.writeImage(image),
-        () => settings.targets,
-      );
+      switchCapture = new SwitchCapture({
+        grab: (quality) => captureDisplay(currentDisplay(), quality),
+        onSwitch: (image) => clipboard.writeImage(image),
+        getTargets: () => settings.targets,
+        getParams: () => PERFORMANCE_PRESETS[settings.performance],
+        getIdleSeconds: () => powerMonitor.getSystemIdleTime(),
+      });
     }
     switchCapture.start();
   } else {
