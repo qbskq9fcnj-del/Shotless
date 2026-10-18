@@ -24,8 +24,6 @@ let tray: Tray | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let capturing = false;
 let lastCaptureAt = 0;
-let settings: Settings;
-let settingsWin: BrowserWindow | null = null;
 
 function createTrayIcon(): Electron.NativeImage {
   // 16x16 の単色アイコンをコードで生成(画像ファイル不要)
@@ -136,7 +134,6 @@ function buildTrayMenu(): void {
   tray?.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Shotless', enabled: false },
-      { label: '設定...', click: openSettings },
       { type: 'separator' },
       { label: '設定…', click: () => openSettingsWindow() },
       { type: 'separator' },
