@@ -1,0 +1,32 @@
+{
+  "fill": {
+    "automatic-gradient": "srgb:0.20000,0.36000,0.96000,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "dot.svg",
+          "name": "dot"
+        },
+        {
+          "glass": true,
+          "image-name": "brackets.svg",
+          "name": "brackets"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}
