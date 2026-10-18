@@ -46,6 +46,10 @@
       "hardenedRuntime": true,
       "notarize": true,
       "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
     }
   }
 }
