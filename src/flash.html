@@ -5,7 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-  #flash { position: fixed; inset: 0; background: #fff; opacity: 0.85; animation: fade 220ms ease-out forwards; }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0.8; animation: fade 180ms ease-out forwards; }
   @keyframes fade { to { opacity: 0; } }
 </style>
 </head>
@@ -19,7 +19,7 @@
     var ctx = new Ctx();
     var now = ctx.currentTime;
 
-    function click(offset, freq, dur) {
+    function click(offset, freq, dur, vol) {
       var len = Math.floor(ctx.sampleRate * dur);
       var buf = ctx.createBuffer(1, len, ctx.sampleRate);
       var data = buf.getChannelData(0);
@@ -33,15 +33,30 @@
       filter.frequency.value = freq;
       filter.Q.value = 0.9;
       var gain = ctx.createGain();
-      gain.gain.value = 0.7;
+      gain.gain.value = vol;
       src.connect(filter);
       filter.connect(gain);
       gain.connect(ctx.destination);
       src.start(now + offset);
     }
 
-    click(0, 3200, 0.05);
-    click(0.07, 1800, 0.08);
+    function thump() {
+      var osc = ctx.createOscillator();
+      var g = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(90, now + 0.05);
+      g.gain.setValueAtTime(0.5, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.07);
+    }
+
+    thump();
+    click(0, 3200, 0.05, 0.5);
+    click(0.07, 1800, 0.08, 0.45);
   })();
 </script>
 </body>

@@ -24,23 +24,90 @@ let tray: Tray | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let capturing = false;
 
+// 点と線分 (ax,ay)-(bx,by) の距離(線分の端にクランプした射影点との距離)
+function distToSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(ax + t * dx - px, ay + t * dy - py);
+}
+
+// 点と4分円弧(中心 cx,cy・半径 r・角度 a0〜a1 度)の距離
+function distToArc(
+  px: number,
+  py: number,
+  cx: number,
+  cy: number,
+  r: number,
+  a0: number,
+  a1: number,
+): number {
+  const dx = px - cx;
+  const dy = py - cy;
+  const deg = (((Math.atan2(dy, dx) * 180) / Math.PI) % 360 + 360) % 360;
+  if (deg >= a0 && deg <= a1) return Math.abs(Math.hypot(dx, dy) - r);
+  const rad0 = (a0 * Math.PI) / 180;
+  const rad1 = (a1 * Math.PI) / 180;
+  const d0 = Math.hypot(px - (cx + r * Math.cos(rad0)), py - (cy + r * Math.sin(rad0)));
+  const d1 = Math.hypot(px - (cx + r * Math.cos(rad1)), py - (cy + r * Math.sin(rad1)));
+  return Math.min(d0, d1);
+}
+
+// 左上の角の形(線分2本＋円弧)から点までの距離
+function distToCorner(x: number, y: number): number {
+  return Math.min(
+    distToSegment(x, y, 3, 6.5, 3, 5),
+    distToSegment(x, y, 5, 3, 6.5, 3),
+    distToArc(x, y, 5, 5, 2, 180, 270),
+  );
+}
+
 function createTrayIcon(): Electron.NativeImage {
-  // 16x16 の単色アイコンをコードで生成(画像ファイル不要)
-  const size = 16;
+  // 18x18 単位の絵を 2 倍(36x36)で生成(画像ファイル不要)
+  const size = 36;
+  const unit = 18;
   const buf = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4;
-      const border = x < 2 || y < 2 || x >= size - 2 || y >= size - 2;
-      const center = x >= 6 && x < 10 && y >= 6 && y < 10;
-      const on = border || center;
+  const corners: [boolean, boolean][] = [
+    [false, false], // 左上
+    [true, false], // 右上
+    [false, true], // 左下
+    [true, true], // 右下
+  ];
+  const LINE_HALF = 0.8; // 線の太さ 1.6 の半分
+  const DOT_R = 2.4;
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      // 4×4 のサブサンプルで、絵に入った割合を透明度にする
+      let hit = 0;
+      for (let sy = 0; sy < 4; sy++) {
+        for (let sx = 0; sx < 4; sx++) {
+          const x = (px + (sx + 0.5) / 4) / 2;
+          const y = (py + (sy + 0.5) / 4) / 2;
+          const inCorner = corners.some(([flipX, flipY]) => {
+            const cx = flipX ? unit - x : x;
+            const cy = flipY ? unit - y : y;
+            return distToCorner(cx, cy) <= LINE_HALF;
+          });
+          const inDot = Math.hypot(x - 9, y - 9) <= DOT_R;
+          if (inCorner || inDot) hit++;
+        }
+      }
+      const i = (py * size + px) * 4;
       buf[i] = 0; // B
       buf[i + 1] = 0; // G
       buf[i + 2] = 0; // R
-      buf[i + 3] = on ? 255 : 0; // A
+      buf[i + 3] = Math.round((hit / 16) * 255); // A
     }
   }
-  const icon = nativeImage.createFromBitmap(buf, { width: size, height: size });
+  const icon = nativeImage.createFromBitmap(buf, { width: size, height: size, scaleFactor: 2 });
   if (process.platform === 'darwin') icon.setTemplateImage(true);
   return icon;
 }
@@ -81,6 +148,7 @@ function flashAndBeep(display: Display): void {
     hasShadow: false,
     show: false,
     alwaysOnTop: true,
+    enableLargerThanScreen: true,
     webPreferences: {
       autoplayPolicy: 'no-user-gesture-required',
       contextIsolation: true,
@@ -89,6 +157,8 @@ function flashAndBeep(display: Display): void {
   });
   win.setIgnoreMouseEvents(true);
   win.setAlwaysOnTop(true, 'screen-saver');
+  // macOS が作業領域に押し込むのを避け、メニューバーと Dock まで覆う
+  win.setBounds(display.bounds);
   win.setContentProtection(true);
   win.loadFile(path.join(__dirname, '..', 'src', 'flash.html'));
   win.once('ready-to-show', () => win.showInactive());
