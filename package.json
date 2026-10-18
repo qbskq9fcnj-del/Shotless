@@ -37,12 +37,6 @@
     },
     "win": {
       "target": "nsis"
-    },
-    "asarUnpack": [
-      "node_modules/active-win/**/*"
-    ]
-  },
-  "dependencies": {
-    "active-win": "^7.7.2"
+    }
   }
 }

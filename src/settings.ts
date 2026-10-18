@@ -1,28 +1,18 @@
 import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DEFAULT_PERFORMANCE, isPerformance, Performance } from './presets';
 
 // 保存するのは設定だけ。スクリーンショット画像は絶対に書き込まない。
 
 export interface Settings {
   shortcut: string;
-  autoOnSwitch: boolean;
-  targets: string[];
-  performance: Performance;
   launchAtLogin: boolean;
 }
 
 export const DEFAULT_SHORTCUT = 'CommandOrControl+Shift+S';
 
 export function defaultSettings(): Settings {
-  return {
-    shortcut: DEFAULT_SHORTCUT,
-    autoOnSwitch: false,
-    targets: ['Claude'],
-    performance: DEFAULT_PERFORMANCE,
-    launchAtLogin: false,
-  };
+  return { shortcut: DEFAULT_SHORTCUT, launchAtLogin: false };
 }
 
 export function sanitizeSettings(raw: unknown): Settings {
@@ -32,15 +22,6 @@ export function sanitizeSettings(raw: unknown): Settings {
   return {
     shortcut:
       typeof r.shortcut === 'string' && r.shortcut.trim() ? r.shortcut.trim() : base.shortcut,
-    autoOnSwitch: typeof r.autoOnSwitch === 'boolean' ? r.autoOnSwitch : base.autoOnSwitch,
-    targets: Array.isArray(r.targets)
-      ? r.targets
-          .filter((t): t is string => typeof t === 'string')
-          .map((t) => t.trim())
-          .filter(Boolean)
-          .slice(0, 20)
-      : base.targets,
-    performance: isPerformance(r.performance) ? r.performance : base.performance,
     launchAtLogin: typeof r.launchAtLogin === 'boolean' ? r.launchAtLogin : base.launchAtLogin,
   };
 }

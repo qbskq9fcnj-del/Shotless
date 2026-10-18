@@ -8,13 +8,10 @@ import {
   ipcMain,
   Menu,
   nativeImage,
-  powerMonitor,
   screen,
   Tray,
 } from 'electron';
 import * as path from 'path';
-import { SwitchCapture } from './autoCapture';
-import { PERFORMANCE_PRESETS } from './presets';
 import { loadSettings, sanitizeSettings, saveSettings, Settings } from './settings';
 
 // 注意: 撮影した画像はメモリ上の nativeImage のまま扱い、ディスクには一切書き込まない。
@@ -25,7 +22,6 @@ const FLASH_MS = 400;
 let settings: Settings;
 let tray: Tray | null = null;
 let settingsWindow: BrowserWindow | null = null;
-let switchCapture: SwitchCapture | null = null;
 let capturing = false;
 
 function createTrayIcon(): Electron.NativeImage {
@@ -53,13 +49,13 @@ function currentDisplay(): Display {
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
 }
 
-async function captureDisplay(display: Display, quality = 1): Promise<Electron.NativeImage | null> {
-  const scale = display.scaleFactor * quality;
+async function captureDisplay(display: Display): Promise<Electron.NativeImage | null> {
+  const scale = display.scaleFactor;
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
     thumbnailSize: {
-      width: Math.max(1, Math.round(display.bounds.width * scale)),
-      height: Math.max(1, Math.round(display.bounds.height * scale)),
+      width: Math.round(display.bounds.width * scale),
+      height: Math.round(display.bounds.height * scale),
     },
   });
   const source =
@@ -126,24 +122,6 @@ function registerShortcut(accelerator: string): boolean {
   }
 }
 
-function applyAutoCapture(): void {
-  if (settings.autoOnSwitch) {
-    if (!switchCapture) {
-      // 自動撮影は音もフラッシュも出さない
-      switchCapture = new SwitchCapture({
-        grab: (quality) => captureDisplay(currentDisplay(), quality),
-        onSwitch: (image) => clipboard.writeImage(image),
-        getTargets: () => settings.targets,
-        getParams: () => PERFORMANCE_PRESETS[settings.performance],
-        getIdleSeconds: () => powerMonitor.getSystemIdleTime(),
-      });
-    }
-    switchCapture.start();
-  } else {
-    switchCapture?.stop();
-  }
-}
-
 function applyLoginItem(): void {
   if (!app.isPackaged) return; // 開発中(npm start)は登録しない
   app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
@@ -154,12 +132,6 @@ function buildTrayMenu(): void {
     Menu.buildFromTemplate([
       { label: 'Shotless', enabled: false },
       { type: 'separator' },
-      {
-        label: '切り替え時に自動撮影',
-        type: 'checkbox',
-        checked: settings.autoOnSwitch,
-        click: (item) => void updateSettings({ autoOnSwitch: item.checked }),
-      },
       { label: '設定…', click: () => openSettingsWindow() },
       { type: 'separator' },
       { label: '終了', click: () => app.quit() },
@@ -187,7 +159,6 @@ function updateSettings(patch: unknown): UpdateResult {
 
   settings = next;
   saveSettings(settings);
-  applyAutoCapture();
   applyLoginItem();
   buildTrayMenu();
   settingsWindow?.webContents.send('settings:changed', settings);
@@ -202,7 +173,7 @@ function openSettingsWindow(): void {
   }
   settingsWindow = new BrowserWindow({
     width: 520,
-    height: 640,
+    height: 380,
     title: 'Shotless 設定',
     autoHideMenuBar: true,
     webPreferences: {
@@ -241,14 +212,10 @@ if (!app.requestSingleInstanceLock()) {
     if (!registerShortcut(settings.shortcut)) {
       console.error(`failed to register shortcut: ${settings.shortcut}`);
     }
-    applyAutoCapture();
     applyLoginItem();
   });
 
   // ウィンドウを持たない常駐アプリなので、全ウィンドウが閉じても終了しない
   app.on('window-all-closed', () => {});
-  app.on('will-quit', () => {
-    globalShortcut.unregisterAll();
-    switchCapture?.stop();
-  });
+  app.on('will-quit', () => globalShortcut.unregisterAll());
 }
