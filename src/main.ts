@@ -17,7 +17,7 @@ import { loadSettings, sanitizeSettings, saveSettings, Settings } from './settin
 // 注意: 撮影した画像はメモリ上の nativeImage のまま扱い、ディスクには一切書き込まない。
 // 保存するのは settings.ts の設定ファイルだけ。
 
-const FLASH_MS = 450;
+const FLASH_MS = 400;
 
 let settings: Settings;
 let tray: Tray | null = null;
@@ -25,8 +25,22 @@ let settingsWindow: BrowserWindow | null = null;
 let capturing = false;
 
 function createTrayIcon(): Electron.NativeImage {
-  // trayTemplate.png / @2x / @3x は Electron が画面の倍率に合わせて自動で選ぶ
-  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'trayTemplate.png'));
+  // 16x16 の単色アイコンをコードで生成(画像ファイル不要)
+  const size = 16;
+  const buf = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const border = x < 2 || y < 2 || x >= size - 2 || y >= size - 2;
+      const center = x >= 6 && x < 10 && y >= 6 && y < 10;
+      const on = border || center;
+      buf[i] = 0; // B
+      buf[i + 1] = 0; // G
+      buf[i + 2] = 0; // R
+      buf[i + 3] = on ? 255 : 0; // A
+    }
+  }
+  const icon = nativeImage.createFromBitmap(buf, { width: size, height: size });
   if (process.platform === 'darwin') icon.setTemplateImage(true);
   return icon;
 }

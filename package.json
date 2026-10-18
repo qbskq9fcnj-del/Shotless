@@ -26,8 +26,7 @@
       "dist/**/*",
       "src/flash.html",
       "src/settings.html",
-      "package.json",
-      "build/trayTemplate*.png"
+      "package.json"
     ],
     "mac": {
       "target": [
