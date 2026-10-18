@@ -5,20 +5,25 @@ import {
   desktopCapturer,
   Display,
   globalShortcut,
+  ipcMain,
   Menu,
   nativeImage,
   screen,
   Tray,
 } from 'electron';
 import * as path from 'path';
+import { SwitchCapture } from './autoCapture';
+import { loadSettings, sanitizeSettings, saveSettings, Settings } from './settings';
 
 // 注意: 撮影した画像はメモリ上の nativeImage のまま扱い、ディスクには一切書き込まない。
-// ここでは fs を使わないこと。
+// 保存するのは settings.ts の設定ファイルだけ。
 
-const SHORTCUT = 'CommandOrControl+Shift+S';
 const FLASH_MS = 400;
 
+let settings: Settings;
 let tray: Tray | null = null;
+let settingsWindow: BrowserWindow | null = null;
+let switchCapture: SwitchCapture | null = null;
 let capturing = false;
 
 function createTrayIcon(): Electron.NativeImage {
@@ -94,6 +99,7 @@ function flashAndBeep(display: Display): void {
   }, FLASH_MS);
 }
 
+// ショートカットで撮影する。クリップボードに入れ、音とフラッシュで知らせる。
 async function takeScreenshot(): Promise<void> {
   if (capturing) return;
   capturing = true;
@@ -110,30 +116,135 @@ async function takeScreenshot(): Promise<void> {
   }
 }
 
-function setupTray(): void {
-  tray = new Tray(createTrayIcon());
-  tray.setToolTip(`Shotless (${SHORTCUT})`);
-  tray.setContextMenu(
+function registerShortcut(accelerator: string): boolean {
+  try {
+    return globalShortcut.register(accelerator, () => void takeScreenshot());
+  } catch {
+    return false; // 不正なアクセラレータ
+  }
+}
+
+function applyAutoCapture(): void {
+  if (settings.autoOnSwitch) {
+    if (!switchCapture) {
+      // 自動撮影は音もフラッシュも出さない
+      switchCapture = new SwitchCapture(
+        () => captureDisplay(currentDisplay()),
+        (image) => clipboard.writeImage(image),
+        () => settings.targets,
+      );
+    }
+    switchCapture.start();
+  } else {
+    switchCapture?.stop();
+  }
+}
+
+function applyLoginItem(): void {
+  if (!app.isPackaged) return; // 開発中(npm start)は登録しない
+  app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
+}
+
+function buildTrayMenu(): void {
+  tray?.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Shotless', enabled: false },
+      { type: 'separator' },
+      {
+        label: '切り替え時に自動撮影',
+        type: 'checkbox',
+        checked: settings.autoOnSwitch,
+        click: (item) => void updateSettings({ autoOnSwitch: item.checked }),
+      },
+      { label: '設定…', click: () => openSettingsWindow() },
       { type: 'separator' },
       { label: '終了', click: () => app.quit() },
     ]),
   );
+  tray?.setToolTip(`Shotless (${settings.shortcut})`);
+}
+
+type UpdateResult = { ok: true; settings: Settings } | { ok: false; error: string; settings: Settings };
+
+function updateSettings(patch: unknown): UpdateResult {
+  const next = sanitizeSettings({ ...settings, ...(typeof patch === 'object' && patch ? patch : {}) });
+
+  if (next.shortcut !== settings.shortcut) {
+    globalShortcut.unregister(settings.shortcut);
+    if (!registerShortcut(next.shortcut)) {
+      registerShortcut(settings.shortcut); // 失敗したら元のキーに戻す
+      return {
+        ok: false,
+        error: 'このキーは登録できませんでした(他のアプリが使っている可能性があります)',
+        settings,
+      };
+    }
+  }
+
+  settings = next;
+  saveSettings(settings);
+  applyAutoCapture();
+  applyLoginItem();
+  buildTrayMenu();
+  settingsWindow?.webContents.send('settings:changed', settings);
+  return { ok: true, settings };
+}
+
+function openSettingsWindow(): void {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  settingsWindow = new BrowserWindow({
+    width: 520,
+    height: 640,
+    title: 'Shotless 設定',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  settingsWindow.removeMenu();
+  settingsWindow.loadFile(path.join(__dirname, '..', 'src', 'settings.html'));
+  settingsWindow.on('closed', () => {
+    settingsWindow = null;
+  });
+  app.focus({ steal: true });
+}
+
+function setupTray(): void {
+  tray = new Tray(createTrayIcon());
+  tray.on('double-click', () => openSettingsWindow());
+  buildTrayMenu();
 }
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  app.on('second-instance', () => openSettingsWindow());
+
   app.whenReady().then(() => {
     if (process.platform === 'darwin') app.dock?.hide();
+    settings = loadSettings();
+
+    ipcMain.handle('settings:get', () => settings);
+    ipcMain.handle('settings:set', (_event, patch) => updateSettings(patch));
+
     setupTray();
-    if (!globalShortcut.register(SHORTCUT, () => void takeScreenshot())) {
-      console.error(`failed to register shortcut: ${SHORTCUT}`);
+    if (!registerShortcut(settings.shortcut)) {
+      console.error(`failed to register shortcut: ${settings.shortcut}`);
     }
+    applyAutoCapture();
+    applyLoginItem();
   });
 
   // ウィンドウを持たない常駐アプリなので、全ウィンドウが閉じても終了しない
   app.on('window-all-closed', () => {});
-  app.on('will-quit', () => globalShortcut.unregisterAll());
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+    switchCapture?.stop();
+  });
 }
