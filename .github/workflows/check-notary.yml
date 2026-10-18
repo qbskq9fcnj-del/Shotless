@@ -9,10 +9,14 @@ jobs:
     steps:
       - name: Check stored Apple credentials
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          RAW_APPLE_ID: ${{ secrets.APPLE_ID }}
+          RAW_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          RAW_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          APPLE_ID=$(printf '%s' "$RAW_APPLE_ID" | tr -d '[:space:]')
+          APPLE_APP_SPECIFIC_PASSWORD=$(printf '%s' "$RAW_APPLE_APP_SPECIFIC_PASSWORD" | tr -d '[:space:]')
+          APPLE_TEAM_ID=$(printf '%s' "$RAW_APPLE_TEAM_ID" | tr -d '[:space:]')
+          echo "raw password length: ${#RAW_APPLE_APP_SPECIFIC_PASSWORD}"
           echo "APPLE_ID length: ${#APPLE_ID}"
           echo "APPLE_TEAM_ID length: ${#APPLE_TEAM_ID}"
           echo "APP password length: ${#APPLE_APP_SPECIFIC_PASSWORD}"

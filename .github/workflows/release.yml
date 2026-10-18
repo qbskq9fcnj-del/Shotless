@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Sign, notarize and publish to the existing v* release'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -12,6 +17,8 @@ permissions:
 jobs:
   build:
     runs-on: macos-26
+    env:
+      PUBLISH: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.publish }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,29 +27,39 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - name: Clean Apple credentials (strip whitespace)
+        if: ${{ env.PUBLISH == 'true' }}
+        env:
+          RAW_APPLE_ID: ${{ secrets.APPLE_ID }}
+          RAW_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          RAW_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            raw_var="RAW_$name"
+            clean=$(printf '%s' "${!raw_var}" | tr -d '[:space:]')
+            echo "::add-mask::$clean"
+            echo "$name=$clean" >> "$GITHUB_ENV"
+          done
       - name: Build, sign, notarize and publish
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ env.PUBLISH == 'true' }}
         run: npm run build && npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - name: Build only (unsigned)
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ env.PUBLISH != 'true' }}
         run: npm run build && npx electron-builder --publish never -c.mac.notarize=false -c.mac.identity=null
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Check icon is bundled
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ env.PUBLISH != 'true' }}
         run: |
           app=$(ls -d release/mac*/Shotless.app | head -1)
           ls "$app/Contents/Resources" | grep -E 'Assets.car|icns'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$app/Contents/Info.plist"
       - name: Upload unsigned dmg
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ env.PUBLISH != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: shotless-unsigned
