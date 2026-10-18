@@ -1,6 +1,10 @@
 # Shotless
 
-全画面を撮影して、**クリップボードにだけ**入れるアプリです。画像ファイルは一切保存しません。Windows / Mac 対応。
+全画面を撮影して、**クリップボードにだけ**入れるアプリです。画像ファイルは一切保存しません。Mac 対応。
+
+## ダウンロード
+
+[Releases](https://github.com/qbskq9fcnj-del/Shotless/releases) から Mac 用の `.dmg` をダウンロードします(Apple Silicon は `arm64`、Intel は `x64`)。開いて Shotless を Applications にドラッグしてください。Apple の署名・公証済みです。Windows 版は今のところありません。
 
 ## 使い方
 
@@ -44,7 +48,7 @@ npm start        # ビルドして起動
 npm run dist     # インストーラを release/ に作成
 ```
 
-`v*` のタグを push すると、GitHub Actions が Windows 用と Mac 用をビルドして Releases に載せます。
+`v*` のタグを push すると、GitHub Actions が Mac 用をビルド・署名・公証して Releases に載せます。
 
 ## ライセンス
 

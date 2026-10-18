@@ -11,10 +11,7 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,11 +20,30 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: Build and publish
+      - name: Build, sign, notarize and publish
         if: startsWith(github.ref, 'refs/tags/v')
-        run: npx electron-builder --publish always
+        run: npm run build && npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build only
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Build only (unsigned)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run: npm run dist
+        run: npm run build && npx electron-builder --publish never -c.mac.notarize=false -c.mac.identity=null
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Check icon is bundled
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          app=$(ls -d release/mac*/Shotless.app | head -1)
+          ls "$app/Contents/Resources" | grep -E 'Assets.car|icns'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$app/Contents/Info.plist"
+      - name: Upload unsigned dmg
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: shotless-unsigned
+          path: release/*.dmg
