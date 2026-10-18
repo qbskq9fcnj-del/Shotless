@@ -5,21 +5,25 @@ import {
   desktopCapturer,
   Display,
   globalShortcut,
+  ipcMain,
   Menu,
   nativeImage,
   screen,
   Tray,
 } from 'electron';
 import * as path from 'path';
+import { loadSettings, sanitize, saveSettings, Settings } from './settings';
 
 // 注意: 撮影した画像はメモリ上の nativeImage のまま扱い、ディスクには一切書き込まない。
-// ここでは fs を使わないこと。
+// 画像の書き込みに fs を使わないこと(settings.ts が設定JSONだけを保存する)。
 
-const SHORTCUT = 'CommandOrControl+Shift+S';
 const FLASH_MS = 400;
 
 let tray: Tray | null = null;
 let capturing = false;
+let lastCaptureAt = 0;
+let settings: Settings;
+let settingsWin: BrowserWindow | null = null;
 
 function createTrayIcon(): Electron.NativeImage {
   // 16x16 の単色アイコンをコードで生成(画像ファイル不要)
@@ -96,12 +100,14 @@ function flashAndBeep(display: Display): void {
 
 async function takeScreenshot(): Promise<void> {
   if (capturing) return;
+  if (Date.now() - lastCaptureAt < settings.intervalMs) return;
   capturing = true;
   try {
     const display = currentDisplay();
     const image = await captureDisplay(display);
     if (!image) return; // 権限がない等。通知は出さない。
     clipboard.writeImage(image);
+    lastCaptureAt = Date.now();
     flashAndBeep(display);
   } catch (err) {
     console.error('capture failed:', err);
@@ -110,12 +116,65 @@ async function takeScreenshot(): Promise<void> {
   }
 }
 
+function registerShortcut(accelerator: string): boolean {
+  try {
+    return globalShortcut.register(accelerator, () => void takeScreenshot());
+  } catch {
+    return false;
+  }
+}
+
+function openSettings(): void {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.focus();
+    return;
+  }
+  settingsWin = new BrowserWindow({
+    width: 380,
+    height: 300,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    title: 'Shotless 設定',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  settingsWin.setMenu(null);
+  settingsWin.loadFile(path.join(__dirname, '..', 'src', 'settings.html'));
+  settingsWin.on('closed', () => {
+    settingsWin = null;
+  });
+}
+
+function setupIpc(): void {
+  ipcMain.handle('settings:get', () => settings);
+  ipcMain.handle('settings:save', (_e, input: unknown) => {
+    const next = sanitize(input);
+    if (next.shortcut !== settings.shortcut) {
+      // 新しいショートカットが登録できなければ、元のものを残す
+      globalShortcut.unregister(settings.shortcut);
+      if (!registerShortcut(next.shortcut)) {
+        registerShortcut(settings.shortcut);
+        return { ok: false, error: 'このショートカットは使えません' };
+      }
+    }
+    settings = next;
+    saveSettings(settings);
+    tray?.setToolTip(`Shotless (${settings.shortcut})`);
+    return { ok: true, settings };
+  });
+}
+
 function setupTray(): void {
   tray = new Tray(createTrayIcon());
-  tray.setToolTip(`Shotless (${SHORTCUT})`);
+  tray.setToolTip(`Shotless (${settings.shortcut})`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Shotless', enabled: false },
+      { label: '設定...', click: openSettings },
       { type: 'separator' },
       { label: '終了', click: () => app.quit() },
     ]),
@@ -127,9 +186,11 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.whenReady().then(() => {
     if (process.platform === 'darwin') app.dock?.hide();
+    settings = loadSettings();
     setupTray();
-    if (!globalShortcut.register(SHORTCUT, () => void takeScreenshot())) {
-      console.error(`failed to register shortcut: ${SHORTCUT}`);
+    setupIpc();
+    if (!registerShortcut(settings.shortcut)) {
+      console.error(`failed to register shortcut: ${settings.shortcut}`);
     }
   });
 

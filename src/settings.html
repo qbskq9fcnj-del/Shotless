@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Shotless 設定</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 20px; color: #222; }
+  label { display: block; margin-top: 16px; font-weight: 600; }
+  small { display: block; color: #666; font-weight: 400; margin-top: 2px; }
+  input { margin-top: 6px; padding: 6px 8px; font-size: 14px; width: 220px; box-sizing: border-box; }
+  button { margin-top: 20px; padding: 6px 16px; font-size: 14px; }
+  #msg { margin-left: 12px; color: #1a7f37; }
+  #msg.err { color: #c62828; }
+</style>
+</head>
+<body>
+<label>ショートカット
+  <small>入力欄をクリックして、使いたいキーを押してください</small>
+  <input id="shortcut" readonly>
+</label>
+<label>撮影間隔(ミリ秒)
+  <small>この時間より短い連続撮影は無視します(0〜10000)</small>
+  <input id="interval" type="number" min="0" max="10000" step="100">
+</label>
+<button id="save">保存</button><span id="msg"></span>
+<script>
+  var sc = document.getElementById('shortcut');
+  var iv = document.getElementById('interval');
+  var msg = document.getElementById('msg');
+  var MODS = ['Control', 'Shift', 'Alt', 'Meta'];
+
+  function say(text, err) { msg.textContent = text; msg.className = err ? 'err' : ''; }
+
+  function keyName(e) {
+    if (e.code.indexOf('Key') === 0) return e.code.slice(3);
+    if (e.code.indexOf('Digit') === 0) return e.code.slice(5);
+    if (/^F\d+$/.test(e.code)) return e.code;
+    var map = { Space: 'Space', Enter: 'Return', Tab: 'Tab', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right' };
+    return map[e.code] || null;
+  }
+
+  sc.addEventListener('keydown', function (e) {
+    e.preventDefault();
+    if (MODS.indexOf(e.key) !== -1) return;
+    var key = keyName(e);
+    if (!key) return say('このキーは使えません', true);
+    if (!(e.ctrlKey || e.metaKey || e.altKey)) return say('Ctrl / Cmd / Alt のどれかを一緒に押してください', true);
+    var parts = [];
+    if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    parts.push(key);
+    sc.value = parts.join('+');
+    say('');
+  });
+
+  document.getElementById('save').addEventListener('click', function () {
+    window.shotless.saveSettings({ shortcut: sc.value, intervalMs: Number(iv.value) }).then(function (r) {
+      if (r.ok) { sc.value = r.settings.shortcut; iv.value = r.settings.intervalMs; say('保存しました'); }
+      else say(r.error, true);
+    });
+  });
+
+  window.shotless.getSettings().then(function (s) { sc.value = s.shortcut; iv.value = s.intervalMs; });
+</script>
+</body>
+</html>
