@@ -1,28 +1,28 @@
 {
   "fill": {
-    "automatic-gradient": "srgb:0.20000,0.36000,0.96000,1.00000"
+    "automatic-gradient": "srgb:0.96000,0.97000,0.98000,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
           "glass": true,
-          "image-name": "dot.svg",
-          "name": "dot"
+          "image-name": "panel.svg",
+          "name": "panel"
         },
         {
-          "glass": true,
+          "glass": false,
           "image-name": "brackets.svg",
           "name": "brackets"
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.4
       },
       "translucency": {
         "enabled": true,
-        "value": 0.4
+        "value": 0.3
       }
     }
   ],

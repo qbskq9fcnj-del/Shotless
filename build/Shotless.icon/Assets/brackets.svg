@@ -1,8 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <g fill="none" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M260 380V308A48 48 0 0 1 308 260H380"/>
-    <path d="M644 260H716A48 48 0 0 1 764 308V380"/>
-    <path d="M764 644V716A48 48 0 0 1 716 764H644"/>
-    <path d="M380 764H308A48 48 0 0 1 260 716V644"/>
+  <defs>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#40434C"/>
+      <stop offset="1" stop-color="#141519"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#b)" stroke-width="52" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M236 396V332A96 96 0 0 1 332 236H396"/>
+    <path d="M628 236H692A96 96 0 0 1 788 332V396"/>
+    <path d="M788 628V692A96 96 0 0 1 692 788H628"/>
+    <path d="M396 788H332A96 96 0 0 1 236 692V628"/>
   </g>
 </svg>
