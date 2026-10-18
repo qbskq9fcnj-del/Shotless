@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Shotless 設定</title>
+<style>
+  :root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --line: #d0d7de; --accent: #0969da; --err: #cf222e; --ok: #1a7f37; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #8d96a0; --line: #30363d; --accent: #4493f8; --err: #ff7b72; --ok: #3fb950; }
+  }
+  body { margin: 0; padding: 20px 24px 28px; background: var(--bg); color: var(--fg); font: 14px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  section { padding: 14px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 14px; margin: 0 0 4px; }
+  p.hint { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  input[type=text] { flex: 1; box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; font: inherit; }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input.recording { outline: 2px solid var(--accent); }
+  button { padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
+  button:hover { border-color: var(--accent); }
+  label.check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+  label.check input { margin-top: 5px; }
+  #status { min-height: 20px; margin-top: 12px; font-size: 12.5px; }
+  #status.err { color: var(--err); }
+  #status.ok { color: var(--ok); }
+</style>
+</head>
+<body>
+<h1>Shotless 設定</h1>
+
+<section>
+  <h2>ショートカットキー</h2>
+  <p class="hint">入力欄をクリックして、使いたいキーを押してください。押すと、音とフラッシュつきで撮影します。</p>
+  <div class="row">
+    <input id="shortcut" type="text" readonly>
+    <button id="resetShortcut" type="button">既定に戻す</button>
+  </div>
+</section>
+
+<section>
+  <label class="check">
+    <input id="launchAtLogin" type="checkbox">
+    <span>
+      <h2>ログイン時に自動で起動する</h2>
+      <p class="hint">パソコンにログインしたとき、Shotless をトレイに常駐させます。</p>
+    </span>
+  </label>
+</section>
+
+<div id="status"></div>
+
+<script>
+(function () {
+  var api = window.shotless;
+  var isMac = api.platform === 'darwin';
+  var $ = function (id) { return document.getElementById(id); };
+  var shortcutInput = $('shortcut');
+  var statusEl = $('status');
+  var current = null;
+  var recording = false;
+  var statusTimer = null;
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text || '';
+    statusEl.className = kind || '';
+    clearTimeout(statusTimer);
+    if (text && kind === 'ok') statusTimer = setTimeout(function () { setStatus(''); }, 2500);
+  }
+
+  function prettyShortcut(accel) {
+    return accel
+      .replace('CommandOrControl', isMac ? 'Command' : 'Control')
+      .split('+').join(' + ');
+  }
+
+  function render(settings) {
+    current = settings;
+    shortcutInput.value = prettyShortcut(settings.shortcut);
+    $('launchAtLogin').checked = settings.launchAtLogin;
+  }
+
+  function save(patch) {
+    return api.setSettings(patch).then(function (res) {
+      if (res.ok) { render(res.settings); setStatus('保存しました', 'ok'); }
+      else { render(res.settings || current); setStatus(res.error || '保存できませんでした', 'err'); }
+    });
+  }
+
+  var CODE_MAP = {
+    ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
+    Space: 'Space', Enter: 'Return', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete',
+    Insert: 'Insert', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown',
+    Minus: '-', Equal: '=', Comma: ',', Period: '.', Slash: '/', Semicolon: ';',
+    Quote: "'", BracketLeft: '[', BracketRight: ']', Backslash: '\\', Backquote: '`'
+  };
+
+  function keyFromCode(code) {
+    var m;
+    if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
+    if ((m = /^Digit(\d)$/.exec(code))) return m[1];
+    if (/^F([1-9]|1\d|2[0-4])$/.test(code)) return code;
+    return CODE_MAP[code] || null;
+  }
+
+  shortcutInput.addEventListener('focus', function () {
+    recording = true;
+    shortcutInput.classList.add('recording');
+    shortcutInput.value = 'キーを押してください…';
+  });
+  shortcutInput.addEventListener('blur', function () {
+    recording = false;
+    shortcutInput.classList.remove('recording');
+    if (current) shortcutInput.value = prettyShortcut(current.shortcut);
+  });
+  shortcutInput.addEventListener('keydown', function (e) {
+    if (!recording) return;
+    e.preventDefault();
+    if (e.code === 'Escape') { shortcutInput.blur(); return; }
+    var key = keyFromCode(e.code);
+    if (!key) return; // 修飾キーだけ押された間は待つ
+    var isFunctionKey = /^F\d+$/.test(key);
+    var mods = [];
+    if (e.ctrlKey) mods.push('Control');
+    if (e.metaKey) mods.push(isMac ? 'Command' : 'Super');
+    if (e.altKey) mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    if (!mods.length && !isFunctionKey) {
+      setStatus('Ctrl / Alt / Shift / ' + (isMac ? 'Command' : 'Win') + ' のどれかと一緒に押してください(F1〜F24 は単独でも可)', 'err');
+      return;
+    }
+    var accel = mods.concat([key]).join('+');
+    shortcutInput.blur();
+    save({ shortcut: accel });
+  });
+
+  $('resetShortcut').addEventListener('click', function () { save({ shortcut: 'CommandOrControl+Shift+S' }); });
+  $('launchAtLogin').addEventListener('change', function (e) { save({ launchAtLogin: e.target.checked }); });
+
+  api.onSettingsChanged(render);
+  api.getSettings().then(render);
+})();
+</script>
+</body>
+</html>
