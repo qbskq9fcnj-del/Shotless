@@ -23,7 +23,6 @@ let settings: Settings;
 let tray: Tray | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let capturing = false;
-let lastCaptureAt = 0;
 
 function createTrayIcon(): Electron.NativeImage {
   // 16x16 の単色アイコンをコードで生成(画像ファイル不要)
@@ -101,14 +100,12 @@ function flashAndBeep(display: Display): void {
 // ショートカットで撮影する。クリップボードに入れ、音とフラッシュで知らせる。
 async function takeScreenshot(): Promise<void> {
   if (capturing) return;
-  if (Date.now() - lastCaptureAt < settings.intervalMs) return;
   capturing = true;
   try {
     const display = currentDisplay();
     const image = await captureDisplay(display);
     if (!image) return; // 権限がない等。通知は出さない。
     clipboard.writeImage(image);
-    lastCaptureAt = Date.now();
     flashAndBeep(display);
   } catch (err) {
     console.error('capture failed:', err);

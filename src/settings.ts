@@ -7,14 +7,12 @@ import * as path from 'path';
 export interface Settings {
   shortcut: string;
   launchAtLogin: boolean;
-  // 連続撮影を防ぐ最小間隔(ミリ秒)。自動撮影ではない。
-  intervalMs: number;
 }
 
 export const DEFAULT_SHORTCUT = 'CommandOrControl+Shift+S';
 
 export function defaultSettings(): Settings {
-  return { shortcut: DEFAULT_SHORTCUT, launchAtLogin: false, intervalMs: 1000 };
+  return { shortcut: DEFAULT_SHORTCUT, launchAtLogin: false };
 }
 
 export function sanitizeSettings(raw: unknown): Settings {
@@ -25,10 +23,6 @@ export function sanitizeSettings(raw: unknown): Settings {
     shortcut:
       typeof r.shortcut === 'string' && r.shortcut.trim() ? r.shortcut.trim() : base.shortcut,
     launchAtLogin: typeof r.launchAtLogin === 'boolean' ? r.launchAtLogin : base.launchAtLogin,
-    intervalMs:
-      typeof r.intervalMs === 'number' && Number.isFinite(r.intervalMs)
-        ? Math.min(10000, Math.max(0, Math.round(r.intervalMs)))
-        : base.intervalMs,
   };
 }
 

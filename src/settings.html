@@ -49,12 +49,6 @@
   </label>
 </section>
 
-<section>
-  <h2>撮影間隔(ミリ秒)</h2>
-  <p class="hint">この時間より短い連続撮影は無視します(0〜10000)。</p>
-  <input id="interval" type="number" min="0" max="10000" step="100">
-</section>
-
 <div id="status"></div>
 
 <script>
@@ -85,7 +79,6 @@
     current = settings;
     shortcutInput.value = prettyShortcut(settings.shortcut);
     $('launchAtLogin').checked = settings.launchAtLogin;
-    $('interval').value = settings.intervalMs;
   }
 
   function save(patch) {
@@ -144,8 +137,6 @@
 
   $('resetShortcut').addEventListener('click', function () { save({ shortcut: 'CommandOrControl+Shift+S' }); });
   $('launchAtLogin').addEventListener('change', function (e) { save({ launchAtLogin: e.target.checked }); });
-
-  $('interval').addEventListener('change', function (e) { save({ intervalMs: Number(e.target.value) }); });
 
   api.onSettingsChanged(render);
   api.getSettings().then(render);
