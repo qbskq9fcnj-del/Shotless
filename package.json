@@ -1,7 +1,7 @@
 {
   "name": "shotless",
-  "version": "1.1.0",
-  "description": "ショートカットで全画面を撮影し、クリップボードにだけ入れるアプリ。画像ファイルは保存しません。",
+  "version": "1.2.0",
+  "description": "ショートカットで全画面を撮影し、そのままクリップボードに入れるアプリ。",
   "main": "dist/main.js",
   "license": "MIT",
   "scripts": {
@@ -24,7 +24,7 @@
     },
     "files": [
       "dist/**/*",
-      "src/flash.html",
+      "src/overlay.html",
       "src/settings.html",
       "package.json"
     ],
